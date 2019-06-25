@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+
 <template>
   <div class="login-wrap">
     <div class="login-form-wrap">
@@ -28,7 +28,7 @@
             <!-- 给组件加 class，会作用到它的根元素 -->
             <el-button class="btn-login"
                        type="primary"
-                       @click="onSubmit">登录</el-button>
+                       @click="headlelogin">登录</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -46,7 +46,7 @@ export default {
   name: 'APPLogin',
   data () {
     return {
-      form: {
+      form: { // 可以起其他名字来表示这个表单
         mobile: '15661871940',
         code: ''
       },
@@ -54,8 +54,25 @@ export default {
     }
   },
   methods: {
-    onSubmit () {
-      console.log('submit')
+    headlelogin () { // 提交登录
+      axios({
+        method: 'POST',
+        url: 'http://ttapi.research.itcast.cn/mp/v1_0/authorizations',
+        data: this.form // 发送表单数据
+      }).then(res => { // 成功后的代码，也就是状态码是 >=200 或者 <400 时，都会进入这里
+        this.$message({ // 这个弹出消息，是用的Element组件
+          message: '恭喜你，登录成功！',
+          type: 'success'
+        })
+        this.$router.push({ // 成功后跳转到首页
+          name: 'home' // 首页路由名是home
+        })
+      }).catch(err => { // 失败后的代码，也就是状态码 >= 400的，都会进入这里；catch可以检测到错误err
+      // console.dir(err)可以打印出这个错误
+        if (err.response.status === 400) { // 判断err下的response里的status是否是400
+          this.$message.error('登录失败，手机号或验证码错误！')
+        }
+      })
     },
     hanleSendCode () {
       // 获取data里form中的mobile
