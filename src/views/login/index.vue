@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 <template>
   <div class="login-wrap">
     <div class="login-form-wrap">
@@ -36,6 +37,7 @@
 </template>
 
 <script>
+// 安装好后，引入进来，用它来发送请求
 import axios from 'axios'
 // gt.js向全局window暴露了一个函数 initGeetest
 import '@/vendor/gt'
@@ -48,7 +50,7 @@ export default {
         mobile: '15661871940',
         code: ''
       },
-      captchaObj: null// 表示
+      captchaObj: null// 表示验证码是否初始化，或者验证码的状态
     }
   },
   methods: {
@@ -69,10 +71,11 @@ export default {
         method: 'GET',
         url: `http://ttapi.research.itcast.cn/mp/v1_0/captchas/${mobile}`
       }).then(res => {
+        // res.data 表示服务端响应回来的数据
+        // 表示获取服务端响应过来的data属性
         const data = res.data.data
         // console.log(data)
-        // eslint-disable-next-line no-undef
-        initGeetest({
+        window.initGeetest({// 下面是从极验官网复制的
           // 以下配置参数来自服务端 SDK
           gt: data.gt,
           challenge: data.challenge,
@@ -88,8 +91,27 @@ export default {
             // 只有 ready 了才能显示验证码，ready表示验证码完成初始化
             // onSuccess 表示验证成功；onError 表示验证失败；onClose 表示关闭了验证框
             captchaObj.verify() // 显示验证码
+          }).onSuccess(function () { // 当验证码初始化成功后
+            const {
+              // 解构验证码初始化成功后，返回的一个对象；这个对象里的键值，就是用于发送短信接口必须传的参数
+              // eslint-disable-next-line no-unused-vars是修复报错时系统自动添加的,表示没有使用该元素，或者没有该元素
+              geetest_challenge: challenge, // 就是在解构后另起别名，起为服务端接口要求的参数名
+              geetest_seccode: seccode,
+              geetest_validate: validate } =
+              captchaObj.getValidate()
+            axios({
+              method: 'GET',
+              url: `http://ttapi.research.itcast.cn/mp/v1_0/sms/codes/${mobile}`,
+              params: { // params用于传递 query 查询字符串参数
+                challenge,
+                seccode,
+                validate
+              }
+            }).then(res => {
+              console.log(res.data)
+            })
           })
-          // 此时有一个问题：当用户第一次‘点击获取验证码’后，把弹出框关掉；再点击时，就会再生成一个DOM元素。解决方案：就是在发送请求前先判断验证码是否已经初始化好了。如果初始化好了，就直接显示；
+          // 在验证码初始化的时候有一个问题：当用户第一次‘点击获取验证码’后，把弹出框关掉；再点击时，就会再生成一个DOM元素。解决方案：就是在发送请求前先判断验证码是否已经初始化好了。如果初始化好了，就直接显示；
         })
       })
     }
