@@ -7,17 +7,26 @@
              alt="黑马头条">
       </div>
       <div class="login-form">
-        <el-form ref="form"
-                 :model="form">
+        <!--
+          表单验证：
+          rules 配置验证规则
+            给需要验证的表单项添加 prop属性
+          ref 获取表单组件，可以手动调用表单组件的验证方法
+         -->
+        <el-form :model="form"
+                 :rules="rules"
+                 ref="ruleForm">
           <el-form-item>
             <el-input v-model="form.mobile"
-                      placeholder="手机号"></el-input>
+                      placeholder="手机号"
+                      prop="mobile"></el-input>
           </el-form-item>
           <el-form-item>
             <!-- 支持栅格布局，一共是24列 -->
             <el-col :span="10">
               <el-input v-model="form.code"
-                        placeholder="验证码"></el-input>
+                        placeholder="验证码"
+                        prop="code"></el-input>
             </el-col>
             <el-col :span="9"
                     :offset="5">
@@ -50,11 +59,33 @@ export default {
         mobile: '15661871940',
         code: ''
       },
+      rules: { // 自定义规则的话，去Element官网中看文档
+        mobile: [
+          // { required（必填）: true, message（提示语句）: '请输入手机号', trigger（什么时候验证）: 'blur（失去焦点）' }
+          { required: true, message: '请输入手机号', trigger: 'blur' },
+          // { min: 3, max: 5, message: '长度在 3 到 5 个字符', trigger: 'blur' }
+          { len: 11, message: '长度必须为11个字符', trigger: 'blur' }
+        ],
+        code: [
+          { required: true, message: '请输入验证码', trigger: 'blur' },
+          { len: 6, message: '长度必须为6个字符', trigger: 'blur' }
+        ]
+      },
       captchaObj: null// 表示验证码是否初始化，或者验证码的状态
     }
   },
   methods: {
     headlelogin () { // 提交登录
+      // element表单组件的方法，用于获取当前表单的验证状态
+      this.$refs['ruleForm'].validate(valid => {
+        if (!valid) { // 如果验证不通过，则结束继续执行代码
+          return
+        }
+        this.login() // 当表单验证通过后，调用登录函数
+      })
+    },
+    // 把登录发送的请求封装到一个函数中 login
+    login () {
       axios({
         method: 'POST',
         url: 'http://ttapi.research.itcast.cn/mp/v1_0/authorizations',
@@ -68,13 +99,13 @@ export default {
           name: 'home' // 首页路由名是home
         })
       }).catch(err => { // 失败后的代码，也就是状态码 >= 400的，都会进入这里；catch可以检测到错误err
-      // console.dir(err)可以打印出这个错误
+        // console.dir(err)可以打印出这个错误
         if (err.response.status === 400) { // 判断err下的response里的status是否是400
           this.$message.error('登录失败，手机号或验证码错误！')
         }
       })
     },
-    hanleSendCode () {
+    hanleSendCode () { // 发送验证码
       // 获取data里form中的mobile
       const { mobile } = this.form
 
