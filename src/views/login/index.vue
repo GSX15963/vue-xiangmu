@@ -16,28 +16,33 @@
         <el-form :model="form"
                  :rules="rules"
                  ref="ruleForm">
-          <el-form-item>
+          <el-form-item prop="mobile">
             <el-input v-model="form.mobile"
                       placeholder="手机号"
-                      prop="mobile"></el-input>
+                      ></el-input>
           </el-form-item>
-          <el-form-item>
+          <el-form-item prop="code">
             <!-- 支持栅格布局，一共是24列 -->
             <el-col :span="10">
               <el-input v-model="form.code"
                         placeholder="验证码"
-                        prop="code"></el-input>
+                        ></el-input>
             </el-col>
             <el-col :span="9"
                     :offset="5">
               <el-button @click="hanleSendCode">获取验证码</el-button>
             </el-col>
           </el-form-item>
+          <el-form-item prop="agree">
+            <el-checkbox v-model="form.agree"></el-checkbox>
+            <span>我已阅读并同意<a href="#">用户协议</a>和<a href="#">隐私条款</a></span>
+          </el-form-item>
           <el-form-item>
             <!-- 给组件加 class，会作用到它的根元素 -->
             <el-button class="btn-login"
                        type="primary"
-                       @click="headlelogin">登录</el-button>
+                       @click="headlelogin"
+                       :loading="loginLoading">登录</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -55,11 +60,12 @@ export default {
   name: 'APPLogin',
   data () {
     return {
-      form: { // 可以起其他名字来表示这个表单
+      form: { // 可以起其他名字来表示这个表单数据
         mobile: '15661871940',
-        code: ''
+        code: '',
+        agree: ''// 表示勾选用户协议
       },
-      rules: { // 自定义规则的话，去Element官网中看文档
+      rules: { // 表单验证规则；自定义规则的话，去Element官网中看文档
         mobile: [
           // { required（必填）: true, message（提示语句）: '请输入手机号', trigger（什么时候验证）: 'blur（失去焦点）' }
           { required: true, message: '请输入手机号', trigger: 'blur' },
@@ -69,9 +75,15 @@ export default {
         code: [
           { required: true, message: '请输入验证码', trigger: 'blur' },
           { len: 6, message: '长度必须为6个字符', trigger: 'blur' }
+        ],
+        agree: [
+          { required: true, message: '请同意用户协议', trigger: 'change' },
+          { pattern: /true/, message: '请同意用户协议', trigger: 'change' }
+          // { patten(正则验证规则): /true/(表示必须为true), message: '请同意用户协议', trigger: 'change'(change表示发生改变时触发) }
         ]
       },
-      captchaObj: null// 表示验证码是否初始化，或者验证码的状态
+      captchaObj: null, // 表示验证码是否初始化，或者验证码的状态
+      loginLoading: false // 表示登录按钮的 loading 状态
     }
   },
   methods: {
@@ -85,7 +97,8 @@ export default {
       })
     },
     // 把登录发送的请求封装到一个函数中 login
-    login () {
+    login () { // 登录函数
+      this.loginLoading = true
       axios({
         method: 'POST',
         url: 'http://ttapi.research.itcast.cn/mp/v1_0/authorizations',
@@ -98,12 +111,15 @@ export default {
         this.$router.push({ // 成功后跳转到首页
           name: 'home' // 首页路由名是home
         })
+        this.loginLoading = false
       }).catch(err => { // 失败后的代码，也就是状态码 >= 400的，都会进入这里；catch可以检测到错误err
         // console.dir(err)可以打印出这个错误
         if (err.response.status === 400) { // 判断err下的response里的status是否是400
           this.$message.error('登录失败，手机号或验证码错误！')
         }
+        this.loginLoading = false
       })
+      // this.loginLoading = false  这里因为 axios 是异步的，所以不能写在这里，必须写在上面
     },
     hanleSendCode () { // 发送验证码
       // 获取data里form中的mobile
