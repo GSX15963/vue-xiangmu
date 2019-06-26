@@ -18,15 +18,13 @@
                  ref="ruleForm">
           <el-form-item prop="mobile">
             <el-input v-model="form.mobile"
-                      placeholder="手机号"
-                      ></el-input>
+                      placeholder="手机号"></el-input>
           </el-form-item>
           <el-form-item prop="code">
             <!-- 支持栅格布局，一共是24列 -->
             <el-col :span="10">
               <el-input v-model="form.code"
-                        placeholder="验证码"
-                        ></el-input>
+                        placeholder="验证码"></el-input>
             </el-col>
             <el-col :span="9"
                     :offset="5">
@@ -122,6 +120,18 @@ export default {
       // this.loginLoading = false  这里因为 axios 是异步的，所以不能写在这里，必须写在上面
     },
     hanleSendCode () { // 发送验证码
+    // 验证手机号是否有效，有效才初始化验证码插件；反之不初始化
+      this.$refs['ruleForm'].validateField('mobile', errorMessage => { // element 表单验证-验证单个选项
+        if (errorMessage.trim().length > 0) {
+          // trim() 去除空格
+          // eslint-disable-next-line no-useless-return
+          return
+        }
+        // 手机号码有效，初始化验证码插件
+        this.showGeetest()
+      })
+    },
+    showGeetest () {
       // 获取data里form中的mobile
       const { mobile } = this.form
 
