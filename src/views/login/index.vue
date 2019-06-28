@@ -28,7 +28,12 @@
             </el-col>
             <el-col :span="9"
                     :offset="5">
-              <el-button @click="hanleSendCode">获取验证码</el-button>
+              <el-button @click="hanleSendCode"
+                         :disabled="!!codeTimer || codeLoading">
+                <!-- :disabled= "codeTimer" 会报一个错误，提示期望获得一个布尔值，但定时器的返回值是数字标识，所以在codeTimer前面加两个取反符号（感叹号），进行强制转换布尔值（!!codeTimer"） -->
+                {{ codeTimer ? `剩余${codeSecons}秒` : '获取验证码'}}
+                <!-- 三元表达式，如果有定时器就显示定时器的秒数，如果没有就显示“获取验证码” -->
+              </el-button>
             </el-col>
           </el-form-item>
           <el-form-item prop="agree">
@@ -53,6 +58,8 @@
 import axios from 'axios'
 // gt.js向全局window暴露了一个函数 initGeetest
 import '@/vendor/gt'
+// 创建常量保存定时器时间
+const initCodeSeconds = 6
 
 export default {
   name: 'APPLogin',
@@ -81,7 +88,11 @@ export default {
         ]
       },
       captchaObj: null, // 表示验证码是否初始化，或者验证码的状态
-      loginLoading: false // 表示登录按钮的 loading 状态
+      loginLoading: false, // 表示登录按钮的 loading 状态
+      codeSecons: initCodeSeconds, // 倒计时的时间;;此时如果要更改定时器时间，还得改两个地方，所以可以通过创建一个全局的常量用来保存定时器时间
+      codeTimer: null, // 倒计时定时器
+      sendMobile: '', // 保存初始化验证码之后要发送短信的手机号
+      codeLoading: false // 储存禁用状态
     }
   },
   methods: {
@@ -99,9 +110,13 @@ export default {
       this.loginLoading = true
       axios({
         method: 'POST',
-        url: 'http://ttapi.research.itcast.cn/mp/v1_0/authorizations',
+        url: '/authorizations',
         data: this.form // 发送表单数据
       }).then(res => { // 成功后的代码，也就是状态码是 >=200 或者 <400 时，都会进入这里
+        // 登陆成功，将接口返回的用户信息数据放到本地存储
+        window.localStorage.setItem('user_info', JSON.stringify(res.data.data))
+
+        // Element 提供的消息提示组件
         this.$message({ // 这个弹出消息，是用的Element组件
           message: '恭喜你，登录成功！',
           type: 'success'
@@ -120,30 +135,39 @@ export default {
       // this.loginLoading = false  这里因为 axios 是异步的，所以不能写在这里，必须写在上面
     },
     hanleSendCode () { // 发送验证码
-    // 验证手机号是否有效，有效才初始化验证码插件；反之不初始化
+      // 验证手机号是否有效，有效才初始化验证码插件；反之不初始化
       this.$refs['ruleForm'].validateField('mobile', errorMessage => { // element 表单验证-验证单个选项
         if (errorMessage.trim().length > 0) {
           // trim() 去除空格
           // eslint-disable-next-line no-useless-return
           return
         }
-        // 手机号码有效，初始化验证码插件
-        this.showGeetest()
+
+        // 解决方案：需要通过 captchaObj 是否值为null，来检测验证码是否进行过初始化插件
+        if (this.captchaObj) {
+          // 手机号码有效，初始化验证码插件，在初始化验证码插件之前判断手机号是否发生变化，用sendCode和之前初始化的手机号进行比对，如果两次手机号不一致，就重新初始化插件
+          if (this.form.mobile !== this.sendMobile) {
+            // 将之前生成的验证码插件删除
+            document.body.removeChild(document.querySelector('.geetest_panel'))
+            // 手机发生改变后初始化
+            this.showGeetest()
+          } else {
+            // 如果验证码已经初始化过，并且两次号码一致，就让它直接显示弹出框，不再继续发送请求
+            this.captchaObj.verify()
+          }
+        } else {
+          // 第一次初始化
+          this.showGeetest()
+        }
       })
     },
-    showGeetest () {
-      // 获取data里form中的mobile
-      const { mobile } = this.form
-
-      // 解决方案：需要通过 captchaObj 是否值为null，来检测验证码是否进行过初始化
-      if (this.captchaObj) {
-        // 如果验证码已经初始化过，就让它直接显示弹出框，不再继续发送请求
-        return this.captchaObj.verify()
-      }
-
-      axios({
+    showGeetest () { // 显示验证码组件
+      // 当发送请求后，对‘获取验证码’开启禁用状态
+      this.codeLoading = true
+      // *****函数中的 function 定义的函数中的 this 指向 window *****
+      axios({ // 显示验证码组件
         method: 'GET',
-        url: `http://ttapi.research.itcast.cn/mp/v1_0/captchas/${mobile}`
+        url: `/captchas/${this.form.mobile}`
       }).then(res => {
         // res.data 表示服务端响应回来的数据
         // 表示获取服务端响应过来的data属性
@@ -161,11 +185,14 @@ export default {
           // 在此时，需给data里的captchaObj属性进行赋值;注意要讲function改为箭头函数，箭头函数this指向window
           this.captchaObj = captchaObj
           // 这里可以调用验证实例 captchaObj 的实例方法
-          captchaObj.onReady(function () {
+          // 因为函数中的 function 定义的函数 this 指向 window，并不是指向Vue实例，所以换为箭头函数
+          captchaObj.onReady(() => {
             // 只有 ready 了才能显示验证码，ready表示验证码完成初始化
             // onSuccess 表示验证成功；onError 表示验证失败；onClose 表示关闭了验证框
             captchaObj.verify() // 显示验证码
-          }).onSuccess(function () { // 当验证码初始化成功后
+            // 初始化好了以后，解除‘获取验证码’的禁用状态
+            this.codeLoading = false
+          }).onSuccess(() => { // 当验证码初始化成功后
             const {
               // 解构验证码初始化成功后，返回的一个对象；这个对象里的键值，就是用于发送短信接口必须传的参数
               // eslint-disable-next-line no-unused-vars是修复报错时系统自动添加的,表示没有使用该元素，或者没有该元素
@@ -173,21 +200,39 @@ export default {
               geetest_seccode: seccode,
               geetest_validate: validate } =
               captchaObj.getValidate()
-            axios({
+            axios({ // 获取短信验证码
               method: 'GET',
-              url: `http://ttapi.research.itcast.cn/mp/v1_0/sms/codes/${mobile}`,
+              // **问题：用户在验证完成后又更改手机号，导致短信发错
+              // 解决方案第一步：在这里必须要获取当前最新的手机号，所以${this.form.mobile}，而不是${mobile}；；在上面显示验证码插件时，也确保是最新的手机号
+              // 第二步，在发送验证码之前进行判断手机号是否有变化；先创建一个保存号码的变量
+              url: `/sms/codes/${this.form.mobile}`,
               params: { // params用于传递 query 查询字符串参数
                 challenge,
                 seccode,
                 validate
               }
             }).then(res => {
-              console.log(res.data)
+              // console.log(res.data)
+              // 在获取验证码后，调取倒计时，显示倒计时
+              this.codeCountDown()
             })
           })
           // 在验证码初始化的时候有一个问题：当用户第一次‘点击获取验证码’后，把弹出框关掉；再点击时，就会再生成一个DOM元素。解决方案：就是在发送请求前先判断验证码是否已经初始化好了。如果初始化好了，就直接显示；
         })
       })
+    },
+    codeCountDown () { // 倒计时
+      // console.log(123)
+      this.codeTimer = window.setInterval(() => {
+        // console.log(456)
+        this.codeSecons--// 倒计时的时间减一
+        if (this.codeSecons <= 0) { // 如果时间为0
+          this.codeSecons = initCodeSeconds // 让倒计时的时间回到初始状态（初始的秒数）
+          // 清除定时器，并且重置this.codeTimer为null
+          window.clearInterval(this.codeTimer)
+          this.codeTimer = null // 重置定时器 this.codeTimer 为null
+        }
+      }, 1000)
     }
   }
 }
